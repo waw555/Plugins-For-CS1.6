@@ -67,9 +67,9 @@ public plugin_init() {
 
 public plugin_precache()
 {
-	precache_sound("ms/knife_duel_menu.mp3");
-	precache_sound("ms/knife_duel_stop.mp3");
-	precache_sound("ms/knife_duel_start.mp3");
+	precache_generic("sound/ms/knife_duel_menu.mp3");
+	precache_generic("sound/ms/knife_duel_stop.mp3");
+	precache_generic("sound/ms/knife_duel_start.mp3");
 	g_iFwdSpawn = register_forward(FM_Spawn, "fwd_Spawn", 1);
 }
 
