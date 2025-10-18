@@ -43,7 +43,11 @@ public Fill_trie() {
 	TrieSetString(g_tReplaceInfoMsg, "#Command_Not_Available",				"Данное действие недоступно в Вашем местонахождении");
 	TrieSetString(g_tReplaceInfoMsg, "#CTs_Win",							"Контр-Террористы победили");
 	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Enemy",			"Противник!");
+	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Injured_Hostage",	"Вы ранили заложника!");
 	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Game_timelimit",	"Оставшееся время:  %s:%s");
+	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Killed_Hostage",	"Вы убили заложника");
+	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Killed_Teammate",	"Вы убили друга");
+
 	//	D
 	TrieSetString(g_tReplaceInfoMsg, "#Defusing_Bomb_With_Defuse_Kit",		"Обезвреживание бомбы с набором сапёра");
 	TrieSetString(g_tReplaceInfoMsg, "#Defusing_Bomb_Without_Defuse_Kit",	"Обезвреживание бомбы без набора сапёра");
