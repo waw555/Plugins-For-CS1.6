@@ -45,7 +45,7 @@ public Fill_trie() {
 	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Enemy",			"Противник!");
 	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Injured_Hostage",	"Вы ранили заложника!");
 	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Game_timelimit",	"Оставшееся время:  %s:%s");
-	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Killed_Hostage",	"Вы убили заложника");
+	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Killed_Hostage",	"Вы убили заложника!");
 	TrieSetString(g_tReplaceInfoMsg, "#Cstrike_TitlesTXT_Killed_Teammate",	"Вы убили друга");
 
 	//	D
@@ -137,6 +137,10 @@ public Fill_trie() {
 	TrieSetString(g_tReplaceInfoMsg, "#Friend",								"Друг");
 	TrieSetString(g_tReplaceInfoMsg, "#Enemy",								"Враг");
 	TrieSetString(g_tReplaceInfoMsg, "#Health",								"Здоровье");
+	
+	TrieSetString(g_tReplaceInfoMsg, "#Injured_Hostage",								"Вы ранили заложника!");
+	TrieSetString(g_tReplaceInfoMsg, "#Killed_Hostage",								"Вы убили заложника!");
+	TrieSetString(g_tReplaceInfoMsg, "#Killed_Teammate",								"Вы убили друга");
 	
 	
 	
