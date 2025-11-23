@@ -32,6 +32,7 @@ new g_aModelPath[MAX_MODEL_COUNT][MAX_MODEL_PATH];			//	Полный путь к
 new g_sCurrentModelName[MAX_PLAYER][MAX_MODEL_NAME];		//	Название текущей модели игрока
 new g_sCurrentModelFile[MAX_PLAYER][MAX_MODEL_FILE];		//	Имя файла текущей модели игрока
 new g_i_MessageIDSayText; 									// 	Функция цветного чата
+new g_b_User_Cvar_Minmodel_Enable[MAX_PLAYER] = false;		//	Включены модели пользователя или нет
 
 // ------------------------------------------------------------------------------------------
 // --ИНИЦИАЛИЗАЦИЯ ПЛАГИНА-------------------------------------------------------------------
@@ -171,6 +172,7 @@ loadSettings(szFilename[])
 	return PLUGIN_HANDLED;
 }
 
+//	Создаем меню
 public Create_Model_Menu(id)
 {
 	//	Если игрок не подключен, не продолжаем
@@ -178,74 +180,95 @@ public Create_Model_Menu(id)
 		log_amx("Игрок %d не подключен", id);
 		return PLUGIN_HANDLED;
 	}
-	strtoupper(g_sCurrentModelName[id]);	//	Переводим имя модели в верхний регистр
-	new sMenuName[MAX_PARSE_TEXT];
-	formatex(sMenuName, charsmax(sMenuName), "\w%L \r%s ^n^n\y%L", LANG_PLAYER, "MS_MODEL_CURRENT_MODEL_NAME", g_sCurrentModelName[id], LANG_PLAYER, "MS_MODEL_MENU_NAME");	//	Текущая модель игрока и заголовок меню
 	
-	new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
-	new iUserModelCount = 0;
+	query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
 	
-	if (get_user_team(id) == 1)	//	Команда Террористы
-	{
-		for(new i=0; i <= g_iLoadModelCount; i++)
-		{			
-			if((equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")) && (get_user_flags(id) & read_flags(g_aModelAccess[i])))	//	Если команда модели T или ANY и у пользователя есть соответствующий флаг в правах доступа.
-			{
-				menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
-				iUserModelCount++;
-			}else if(i==g_iLoadModelCount && iUserModelCount){
-				// Если модели закончились, добавить кнопку сброса
-				formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
-				menu_additem(ModelMenu, sMenuName, "reset");
-				client_cmd(id, "spk sound/events/tutor_msg.wav");
+	if(!g_b_User_Cvar_Minmodel_Enable[id]){
+	
+		strtoupper(g_sCurrentModelName[id]);	//	Переводим имя модели в верхний регистр
+		new sMenuName[MAX_PARSE_TEXT];
+		formatex(sMenuName, charsmax(sMenuName), "\w%L \r%s ^n^n\y%L", LANG_PLAYER, "MS_MODEL_CURRENT_MODEL_NAME", g_sCurrentModelName[id], LANG_PLAYER, "MS_MODEL_MENU_NAME");	//	Текущая модель игрока и заголовок меню
+		
+		new ModelMenu = menu_create(sMenuName, "ModelMenu_handler");
+		new iUserModelCount = 0;
+	
+		if (get_user_team(id) == 1)	//	Команда Террористы
+		{
+			for(new i=0; i <= g_iLoadModelCount; i++)
+			{			
+				if((equal(g_aModelTeam[i], "T") || equal(g_aModelTeam[i], "ANY")) && (get_user_flags(id) & read_flags(g_aModelAccess[i])))	//	Если команда модели T или ANY и у пользователя есть соответствующий флаг в правах доступа.
+				{
+					menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
+					iUserModelCount++;
+				}else if(i==g_iLoadModelCount && iUserModelCount){
+					// Если модели закончились, добавить кнопку сброса
+					formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
+					menu_additem(ModelMenu, sMenuName, "reset");
+					client_cmd(id, "spk sound/events/tutor_msg.wav");
+				}
 			}
-		}
-	} 
-	else if (get_user_team(id) == 2)	//	Команда Контр-Террористы
-	{
-		for(new i=0; i <= g_iLoadModelCount; i++)
-		{			
-			if((equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")) && (get_user_flags(id) & read_flags(g_aModelAccess[i])))	//	Если команда модели CT или ANY и у пользователя есть соответствующий флаг в правах доступа.
-			{
-				menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
-				iUserModelCount++;
-			}else if(i==g_iLoadModelCount && iUserModelCount){
-				// Если модели закончились, добавить кнопку сброса
-				formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
-				menu_additem(ModelMenu, sMenuName, "reset");
-				client_cmd(id, "spk sound/events/tutor_msg.wav");
+		} 
+		else if (get_user_team(id) == 2)	//	Команда Контр-Террористы
+		{
+			for(new i=0; i <= g_iLoadModelCount; i++)
+			{			
+				if((equal(g_aModelTeam[i], "CT") || equal(g_aModelTeam[i], "ANY")) && (get_user_flags(id) & read_flags(g_aModelAccess[i])))	//	Если команда модели CT или ANY и у пользователя есть соответствующий флаг в правах доступа.
+				{
+					menu_additem(ModelMenu, g_aModelName[i], g_aModelFile[i]);
+					iUserModelCount++;
+				}else if(i==g_iLoadModelCount && iUserModelCount){
+					// Если модели закончились, добавить кнопку сброса
+					formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_RESET_MODEL");
+					menu_additem(ModelMenu, sMenuName, "reset");
+					client_cmd(id, "spk sound/events/tutor_msg.wav");
+				}
 			}
+		} 
+		else if (get_user_team(id) == 3)	//	Команда Наблюдатель
+		{
+			log_amx("Команда игрока Наблюдатель");
+			client_cmd(id, "spk sound/events/friend_died.wav");
+			return PLUGIN_HANDLED;
 		}
-	} 
-	else if (get_user_team(id) == 3)	//	Команда Наблюдатель
-	{
-		log_amx("Команда игрока Наблюдатель");
-		client_cmd(id, "spk sound/events/friend_died.wav");
-		return PLUGIN_HANDLED;
-	}
-	else
-	{
-		log_amx("Команда игрока еще не выбрана");
-		return PLUGIN_HANDLED;
-	}
+		else
+		{
+			log_amx("Команда игрока еще не выбрана");
+			return PLUGIN_HANDLED;
+		}
 
-	formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_BACK");
-	menu_setprop(ModelMenu, MPROP_BACKNAME, sMenuName);
-	formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_NEXT");
-	menu_setprop(ModelMenu, MPROP_NEXTNAME, sMenuName);
-	formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_EXIT");
-	menu_setprop(ModelMenu, MPROP_EXITNAME, sMenuName);
-	menu_setprop(ModelMenu, MPROP_PAGE_CALLBACK, "menu_page_more_back");
+		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_BACK");
+		menu_setprop(ModelMenu, MPROP_BACKNAME, sMenuName);
+		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_NEXT");
+		menu_setprop(ModelMenu, MPROP_NEXTNAME, sMenuName);
+		formatex(sMenuName, charsmax(sMenuName), "%L", id, "MS_MODEL_MENU_EXIT");
+		menu_setprop(ModelMenu, MPROP_EXITNAME, sMenuName);
+		menu_setprop(ModelMenu, MPROP_PAGE_CALLBACK, "menu_page_more_back");
 
-	menu_display(id, ModelMenu);
-	if(iUserModelCount)
-	{
-		set_task(10.0, "player_cancel_menu", id + 5987,_,_,"a", 1);	// Закрыть меню через 10 секунд
+		menu_display(id, ModelMenu);
+		if(iUserModelCount)
+		{
+			set_task(10.0, "player_cancel_menu", id + 5987,_,_,"a", 1);	// Закрыть меню через 10 секунд
+		}
+	}else{
+		client_printc(id, "\gДля доступа к моделям, необходимо изменить cvar cl_minmodels на 0");
 	}
-	
 	return PLUGIN_HANDLED;
 }
 
+public cvar_query_callback(id, const cvar[], const value[])
+{
+	if(equali(value, "Bad CVAR request")){
+		log_amx("Ошибка в установленном значении cvar cl_minmodels, %s", value);
+		client_printc(id, "\gДля доступа к моделям, необходимо изменить cvar cl_minmodels на 0");
+		g_b_User_Cvar_Minmodel_Enable[id] = true;
+	}else if(equali(value, "0")){
+		g_b_User_Cvar_Minmodel_Enable[id] = false;
+	}else if(equali(value, "1")){
+		g_b_User_Cvar_Minmodel_Enable[id] = true;
+	}
+}
+
+//	Обработчик нажатий кнопок меню
 public ModelMenu_handler(id, ModelMenu, item)
 {
 	if(item == MENU_EXIT) {
@@ -281,6 +304,7 @@ public ModelMenu_handler(id, ModelMenu, item)
 	return PLUGIN_HANDLED;
 }
 
+//	Событие при нажатии кнопки назад и вперед
 public menu_page_more_back(id)
 {
 	client_cmd(id, "spk sound/events/tutor_msg.wav");
@@ -297,6 +321,7 @@ public player_chose_class(id)
 		g_sCurrentModelFile[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
 		g_sCurrentModelName[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
 	}
+	query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
 	remove_task(id);
 	set_task( 5.0, "Create_Model_Menu", id );//Открываем меню для смены модели	
 }
@@ -317,9 +342,11 @@ public player_change_team()
 		cs_get_user_model(id, s_ModelFile, charsmax(s_ModelFile));	//	Получаем текущую модель игрока
 		g_sCurrentModelFile[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
 		g_sCurrentModelName[id] = s_ModelFile;	//	Записываем в глобавльную переменную текущую модель игрока
+		query_client_cvar(id, "cl_minmodels", "cvar_query_callback");
+		remove_task(id);
+		set_task( 5.0, "Create_Model_Menu", id );//Открываем меню для смены модели
 	}
-	remove_task(id);
-	set_task( 5.0, "Create_Model_Menu", id );//Открываем меню для смены модели
+
 }
 //	Отмена меню
 public player_cancel_menu(task_id)
