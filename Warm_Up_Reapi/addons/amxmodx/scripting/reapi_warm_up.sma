@@ -1,4 +1,5 @@
 #include <amxmisc>
+#include <fakemeta>
 #include <reapi>
 
 #define PLUGIN "[ReAPI] Warm UP"
@@ -6,6 +7,17 @@
 #define AUTHOR "Emma Jule"
 #define URL "None"
 #define DESCRIPTIONPLUGIN "Plugin for Warm Up"
+
+#define IsPlayer(%1)    (1 <= %1 <= g_iMaxPlayers)	//	Проверяем, что это игрок,  а не какой либо объект.
+#define ClearArr(%1)    arrayset(_:%1, _:0.0, sizeof(%1))	//	Очищаем массив
+
+enum _:ePlayerData
+{
+	PLAYER_ID,
+	DAMAGE,
+	KILLS,
+	AWARD
+};
 
 enum (+=1)
 {
@@ -73,6 +85,18 @@ new HookChain:g_hCheckMapConditions, HookChain:g_hDropPlayerItem, HookChain:g_hO
 new g_pDefaultCvars[sizeof(g_eCvarsToDisable)][64], g_pCvar[CVARS];
 new g_szWarmUpDescription[64], g_szWarmUpTrack[128], Float:g_flMaxHealth, g_iCountDown, g_iSection, g_iTrackTime;
 
+/* top 5*/
+new g_arrData[MAX_PLAYERS + 1][ePlayerData];
+new g_iPlayerDmg[MAX_PLAYERS + 1];
+new g_iPlayerKills[MAX_PLAYERS + 1];
+new g_iPlayerAward[MAX_PLAYERS + 1];
+new g_iMaxPlayers;
+new g_iCounter = 0;	//	Счетчик для тайминга отображения победителей
+new g_iOriginal_sv_maxspeed = 320;	//	Скорость по умолчанию
+new cvar_name_sv_maxspeed;
+new g_iPlayerTop = 0;
+
+
 public plugin_precache()
 {
 	
@@ -81,6 +105,9 @@ public plugin_precache()
 	
 	if (!ReadConfig())
 		set_fail_state("Something went wrong");
+	
+	precache_sound("weapons/deagle-1.wav");
+	precache_sound("events/task_complete.wav");
 }
 
 public plugin_init()
@@ -93,10 +120,17 @@ public plugin_init()
 	DisableHookChain(g_hDropPlayerItem = RegisterHookChain(RG_CBasePlayer_DropPlayerItem, "CBasePlayer_DropPlayerItem", false));
 	DisableHookChain(g_hOnSpawnEquip = RegisterHookChain(RG_CBasePlayer_OnSpawnEquip, "CBasePlayer_OnSpawnEquip", true));
 	
+	/*top 5 */
+	RegisterHookChain(RG_CSGameRules_RestartRound, "CSGameRules_RestartRound_Post", true);
+	RegisterHookChain(RG_CBasePlayer_TakeDamage, "CBasePlayer_TakeDamage", true);
+	RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", true);
+	g_iMaxPlayers = get_member_game(m_nMaxPlayers);
+	cvar_name_sv_maxspeed = get_cvar_pointer( "sv_maxspeed" );
+	
 	if (g_pCvar[AUTO_AMMO]) {
 		DisableHookChain(g_hKilled = RegisterHookChain(RG_CBasePlayer_Killed, "CBasePlayer_Killed", true));
 	} else {
-		#pragma unused g_hKilled
+		//#pragma unused g_hKilled
 	}
 }
 
@@ -180,20 +214,19 @@ public CBasePlayer_OnSpawnEquip(id)
 	set_entvar(id, var_max_health, g_flMaxHealth);
 }
 
-public CBasePlayer_Killed(id, attacker, gib)
+public CBasePlayer_Killed(Victim, Attacker, gib)
 {
-	if (id == attacker || !is_user_connected(attacker))
+
+	if(!is_user_connected(Victim) || !is_user_connected(Attacker) || Victim == Attacker || !IsPlayer(Attacker) || get_member(Victim, m_iTeam) == get_member(Attacker, m_iTeam) || get_member(Victim, m_bKilledByGrenade))
 		return;
 	
-	if (get_member(id, m_bKilledByGrenade))
-		return;
-	
-	//
-	new pWeapon = get_member(attacker, m_pActiveItem);
+	g_iPlayerKills[Attacker]++;
+
+	new pWeapon = get_member(Attacker, m_pActiveItem);
 	if (is_nullent(pWeapon) || ~CSW_ALL_GUNS & 1 << get_member(pWeapon, m_iId))
 		return;
 	
-	rg_instant_reload_weapons(attacker, pWeapon);
+	//rg_instant_reload_weapons(Attacker, pWeapon);
 }
 
 public Show_Timer()
@@ -202,7 +235,12 @@ public Show_Timer()
 	{
 		remove_task();
 		
-		DisableHookChain(g_hDropPlayerItem);
+		g_iOriginal_sv_maxspeed = get_pcvar_num(cvar_name_sv_maxspeed);
+		log_amx("g_fOriginal_sv_maxspeed = %f", g_iOriginal_sv_maxspeed);
+		set_pcvar_float(cvar_name_sv_maxspeed, 0.0 );
+		
+		
+		/*DisableHookChain(g_hDropPlayerItem);
 		DisableHookChain(g_hOnSpawnEquip);
 		
 		if (g_pCvar[AUTO_AMMO])
@@ -225,7 +263,8 @@ public Show_Timer()
 		
 		// 
 		for (new i; i < ArraySize(g_aPlugins); i++)
-		unpause("ac", fmt("%a", ArrayGetStringHandle(g_aPlugins, i)));
+		unpause("ac", fmt("%a", ArrayGetStringHandle(g_aPlugins, i)));*/
+		set_task(0.5, "fnCompareDamage");
 	}
 	else
 	{
@@ -233,17 +272,19 @@ public Show_Timer()
 		show_dhudmessage(0, "%s", g_szWarmUpDescription);
 		if(--g_iTrackTime <= 0){
 			set_dhudmessage( .red = 0, .green = 255, .blue = 0, .x = -1.0, .y = 0.04, .effects = 0, .fxtime = 0.0, .holdtime = 1.0, .fadeintime = 0.0, .fadeouttime = 0.1);
-			show_dhudmessage(0, "РЕСТАРТ ЧЕРЕЗ %i СЕК", g_iCountDown);
+			show_dhudmessage(0, "РАЗМИНКА ЗАКОНЧИТСЯ ЧЕРЕЗ %i СЕК", g_iCountDown);
 		}else{
 			set_dhudmessage( .red = 255, .green = 255, .blue = 255, .x = -1.0, .y = 0.04, .effects = 0, .fxtime = 0.0, .holdtime = 1.1, .fadeintime = 0.0, .fadeouttime = 0.0);
 			show_dhudmessage(0, "СЕЙЧАС ИГРАЕТ: %s", g_szWarmUpTrack);
 			set_dhudmessage( .red = 0, .green = 255, .blue = 0, .x = -1.0, .y = 0.07, .effects = 0, .fxtime = 0.0, .holdtime = 1.0, .fadeintime = 0.0, .fadeouttime = 0.1);
-			show_dhudmessage(0, "РЕСТАРТ ЧЕРЕЗ %i СЕК", g_iCountDown);
+			show_dhudmessage(0, "РАЗМИНКА ЗАКОНЧИТСЯ ЧЕРЕЗ %i СЕК", g_iCountDown);
 		}
 	}
 }
 
-@restart() {
+@restart() 
+{
+	set_cvar_num("sv_maxspeed", g_iOriginal_sv_maxspeed);
 	client_cmd(0, "stopsound; mp3 stop");
 	set_cvar_num("sv_restart", 1);
 }
@@ -448,6 +489,210 @@ public bool:values(INIParser:handle, const key[], const value[])
 	
 	return true;
 }
-		
-		
 
+/*top 5*/
+public client_putinserver(id)
+{
+	// начальные значения зашедшему игроку
+	g_iPlayerDmg[id] = 0;
+	g_iPlayerKills[id] = 0;
+	g_iPlayerAward[id] = 0;
+}
+
+public CBasePlayer_TakeDamage(const pevVictim, pevInflictor, const pevAttacker, Float:flDamage, bitsDamageType)
+{
+	if(pevVictim == pevAttacker || !IsPlayer(pevAttacker) || (bitsDamageType & DMG_BLAST))
+		return HC_CONTINUE;
+	
+	if(rg_is_player_can_takedamage(pevVictim, pevAttacker))
+		g_iPlayerDmg[pevAttacker] += floatround(flDamage);
+	
+	return HC_CONTINUE;
+}
+
+public fnCompareDamage()
+{
+	new iPlayers[MAX_PLAYERS], iNum, iPlayer;
+
+	get_players(iPlayers, iNum, "h");
+	
+	// цикл сбора инфы по всем игрокам
+	for(new i; i < iNum; i++)
+	{
+		iPlayer = iPlayers[i];
+		
+		g_arrData[i][PLAYER_ID] = iPlayer;
+		g_arrData[i][DAMAGE] = _:g_iPlayerDmg[iPlayer];
+		g_arrData[i][KILLS] = _:g_iPlayerKills[iPlayer];
+		g_arrData[i][AWARD] = _:g_iPlayerAward[iPlayer];
+	}
+	
+	// сортировка массива
+	SortCustom2D(g_arrData, sizeof(g_arrData), "SortRoundDamage");
+
+	client_cmd(0, "spk sound/events/task_complete.wav");
+	set_task(0.5, "ShowStats",.flags = "b");
+	return PLUGIN_HANDLED;
+}
+
+// функция сравнения для сортировки
+public SortRoundDamage(const elem1[], const elem2[])
+{
+	// сравнение дамага
+	return (elem1[DAMAGE] < elem2[DAMAGE]) ? 1 : (elem1[DAMAGE] > elem2[DAMAGE]) ? -1 : 0;
+}
+
+public CSGameRules_RestartRound_Post()
+{
+	new iPlayers[MAX_PLAYERS], iNum, iPlayer;
+	
+	get_players(iPlayers, iNum, "h");
+	
+	for(new i=0; i < iNum; i++)
+	{
+		iPlayer = g_arrData[i][PLAYER_ID];
+		if(!is_user_connected(iPlayer) || !IsPlayer(iPlayer))
+			return;
+		rg_add_account(g_arrData[i][PLAYER_ID], g_arrData[i][AWARD], AS_ADD, true);
+	}
+}
+
+public ShowStats()
+{
+	new szName[MAX_NAME_LENGTH];
+	
+	get_user_name(g_arrData[g_iPlayerTop][PLAYER_ID], szName, charsmax(szName));
+	new i_Award = g_arrData[g_iPlayerTop][AWARD] = g_arrData[g_iPlayerTop][KILLS] * 50 + g_arrData[g_iPlayerTop][DAMAGE];
+	new iCount = g_iPlayerTop + 1;
+
+	switch(g_iCounter)
+	{
+		case 0:
+		{
+			set_dhudmessage( .red = 0, .green = 255, .blue = 0, .x = -1.0, .y = 0.15, .effects = 0, .fxtime = 0.0, .holdtime = 10.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "ПОБЕДИТЕЛИ РАЗМИНКИ");
+			g_iCounter++;
+		}
+		case 1..3:{g_iCounter++;}
+		case 4:
+		{
+			set_dhudmessage( .red = 255, .green = 255, .blue = 255, .x = -1.0, .y = 0.20, .effects = 0, .fxtime = 0.0, .holdtime = 10.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "%d: %s - УБИЙСТВА: %d - УРОН: %d - НАГРАДА: %d$", iCount, szName, g_arrData[g_iPlayerTop][KILLS], g_arrData[g_iPlayerTop][DAMAGE], i_Award);
+			client_cmd(0, "spk sound/weapons/deagle-1.wav");
+			g_iCounter++;
+			g_iPlayerTop++;
+		}
+		case 5:
+		{
+			set_dhudmessage( .red = 255, .green = 255, .blue = 255, .x = -1.0, .y = 0.25, .effects = 0, .fxtime = 0.0, .holdtime = 10.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "%d: %s - УБИЙСТВА: %d - УРОН: %d - НАГРАДА: %d$", iCount, szName, g_arrData[g_iPlayerTop][KILLS], g_arrData[g_iPlayerTop][DAMAGE], i_Award);
+			client_cmd(0, "spk sound/weapons/deagle-1.wav");
+			g_iCounter++;
+			g_iPlayerTop++;
+		}
+		case 6:
+		{
+			set_dhudmessage( .red = 255, .green = 255, .blue = 255, .x = -1.0, .y = 0.30, .effects = 0, .fxtime = 0.0, .holdtime = 10.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "%d: %s - УБИЙСТВА: %d - УРОН: %d - НАГРАДА: %d$", iCount, szName, g_arrData[g_iPlayerTop][KILLS], g_arrData[g_iPlayerTop][DAMAGE], i_Award);
+			client_cmd(0, "spk sound/weapons/deagle-1.wav");
+			g_iCounter++;
+			g_iPlayerTop++;
+		}
+		case 7:
+		{
+			set_dhudmessage( .red = 255, .green = 255, .blue = 255, .x = -1.0, .y = 0.35, .effects = 0, .fxtime = 0.0, .holdtime = 10.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "%d: %s - УБИЙСТВА: %d - УРОН: %d - НАГРАДА: %d$", iCount, szName, g_arrData[g_iPlayerTop][KILLS], g_arrData[g_iPlayerTop][DAMAGE], i_Award);
+			client_cmd(0, "spk sound/weapons/deagle-1.wav");
+			g_iCounter++;
+			g_iPlayerTop++;
+		}
+		case 8:
+		{
+			set_dhudmessage( .red = 255, .green = 255, .blue = 255, .x = -1.0, .y = 0.40, .effects = 0, .fxtime = 0.0, .holdtime = 10.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "%d: %s - УБИЙСТВА: %d - УРОН: %d - НАГРАДА: %d$", iCount, szName, g_arrData[g_iPlayerTop][KILLS], g_arrData[g_iPlayerTop][DAMAGE], i_Award);
+			client_cmd(0, "spk sound/weapons/deagle-1.wav");
+			g_iCounter++;
+			g_iPlayerTop++;
+		}
+		case 9..11:
+		{
+			g_iCounter++;
+		}
+		case 12:
+		{
+			ClearDHUDMessages;
+			g_iCounter++;
+		}
+		case 13..15:
+		{
+			set_dhudmessage( .red = 0, .green = 255, .blue = 0, .x = -1.0, .y = 0.45, .effects = 0, .fxtime = 0.0, .holdtime = 5.0, .fadeintime = 0.0, .fadeouttime = 0.0);
+			show_dhudmessage(0, "ПЕРЕЗАГРУЗКА");
+			g_iCounter++;
+		}
+		case 16:
+		{
+			remove_task();
+			g_iCounter = 0;
+			DisableHookChain(g_hDropPlayerItem);
+			DisableHookChain(g_hOnSpawnEquip);
+			
+			if (g_pCvar[AUTO_AMMO])
+				DisableHookChain(g_hKilled);
+			
+			//
+			for (new i; i < sizeof(g_eCvarsToDisable); i++) {
+				set_pcvar_string(get_cvar_pointer(g_eCvarsToDisable[i][0]), g_pDefaultCvars[i]);
+			}
+			
+			if (g_pCvar[PAUSE_STATS])
+			{
+				set_cvar_num("csstats_pause", 0);
+				set_cvar_num("aes_track_pause", 0);
+			}
+			
+			for (new i; i < ArraySize(g_aPlugins); i++)
+			unpause("ac", fmt("%a", ArrayGetStringHandle(g_aPlugins, i)));
+				
+			ClearDHUDMessages;
+			
+			set_cvar_num("sv_restart", 1);
+			set_cvar_num("sv_maxspeed", g_iOriginal_sv_maxspeed);
+			client_cmd(0, "stopsound; mp3 stop");
+		}
+		default:
+		{
+			remove_task();
+			g_iCounter = 0;
+			DisableHookChain(g_hDropPlayerItem);
+			DisableHookChain(g_hOnSpawnEquip);
+			
+			if (g_pCvar[AUTO_AMMO])
+				DisableHookChain(g_hKilled);
+			
+			//
+			for (new i; i < sizeof(g_eCvarsToDisable); i++) {
+				set_pcvar_string(get_cvar_pointer(g_eCvarsToDisable[i][0]), g_pDefaultCvars[i]);
+			}
+			
+			if (g_pCvar[PAUSE_STATS])
+			{
+				set_cvar_num("csstats_pause", 0);
+				set_cvar_num("aes_track_pause", 0);
+			}
+			
+			for (new i; i < ArraySize(g_aPlugins); i++)
+			unpause("ac", fmt("%a", ArrayGetStringHandle(g_aPlugins, i)));
+				
+			ClearDHUDMessages;
+			
+			set_cvar_num("sv_restart", 1);
+			set_cvar_num("sv_maxspeed", g_iOriginal_sv_maxspeed);
+			client_cmd(0, "stopsound; mp3 stop");
+		}
+	}
+}
+
+//	Очистка DHUD сообщений
+stock ClearDHUDMessages()
+        for (new iDHUD = 0; iDHUD < 8; iDHUD++)
+                show_dhudmessage(0, ""); 
